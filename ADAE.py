@@ -166,11 +166,6 @@ class ADAE(object):
         return Model(self.model.inputs[0], self.model.layers[2](self.model.layers[1](self.model.inputs[0])))
 
     def train(self, x_train, x_test, y_train, y_test, epochs=1):
-        import scipy.ndimage as ndi
-        x_train = ndi.zoom(x_train, (1, 32 / 28, 32 / 28), order=2)
-        x_test = ndi.zoom(x_test, (1, 32 / 28, 32 / 28), order=2)
-        x_train = np.expand_dims((x_train.astype('float32') - 127.5) / 127.5, axis=-1)
-        x_test = np.expand_dims((x_train.astype('float32') - 127.5) / 255., axis=-1)
         self.model.add_loss(K.mean(self.g_loss))
         self.model.add_metric(self.g_loss, aggregation='mean', name="g_loss")
         self.model.add_loss(K.mean(self.d_loss))
@@ -187,12 +182,13 @@ class ADAE(object):
                 x_train,
                 batch_size=64,
                 steps_per_epoch=200,
+                epochs=epoch,
                 callbacks=[
                     LearningRateScheduler(
                         lr_scheduler(initial_lr=1e-3, decay_factor=0.75, step_size=10, min_lr=1e-5)
                     )
                 ],
-                initial_epoch=epoch
+                initial_epoch=epoch - 1
             )
 
             # Train discriminator only
@@ -204,16 +200,17 @@ class ADAE(object):
                 x_train,
                 batch_size=64,
                 steps_per_epoch=200,
+                epochs=epoch,
                 callbacks=[
                     ModelCheckpoint(
-                        './model_checkpoint/model_gloss_{g_loss:.4f}_dloss_{d_loss:.4f}.h5',
+                        './model_checkpoint/model_%d_gloss_{g_loss:.4f}_dloss_{d_loss:.4f}.h5' % epoch,
                         verbose=1
                     ),
                     LearningRateScheduler(
                         lr_scheduler(initial_lr=1e-3, decay_factor=0.75, step_size=10, min_lr=1e-5)
                     )
                 ],
-                initial_epoch=epoch
+                initial_epoch=epoch - 1
             )
 
 if __name__ == '__main__':
@@ -223,4 +220,9 @@ if __name__ == '__main__':
     test_filter = np.where((y_test == 8))
     x_train = x_train[train_filter]
     x_test = x_test[test_filter]
+    import scipy.ndimage as ndi
+    x_train = ndi.zoom(x_train, (1, 32 / 28, 32 / 28), order=2)
+    x_test = ndi.zoom(x_test, (1, 32 / 28, 32 / 28), order=2)
+    x_train = np.expand_dims((x_train.astype('float32') - 127.5) / 127.5, axis=-1)
+    x_test = np.expand_dims((x_train.astype('float32') - 127.5) / 255., axis=-1)
     adae.train(x_train, x_test, y_train, y_test, epochs=200)
